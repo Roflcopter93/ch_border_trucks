@@ -125,7 +125,9 @@
             margin-top: 15px;
         }
 
-        .route-form input[type="text"] {
+        .route-form input[type="text"],
+        .route-form input[type="date"],
+        .route-form input[type="time"] {
             padding: 6px 8px;
             border-radius: 4px;
             border: 1px solid #ccc;
@@ -232,7 +234,8 @@
             <h4>Routenplanung</h4>
             <div class="route-form">
                 <input type="text" id="postalInput" placeholder="Ziel-PLZ">
-                <input type="text" id="departureInput" value="06:00" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" placeholder="HH:MM">
+                <input type="date" id="departureDate">
+                <input type="time" id="departureTime" value="06:00">
                 <button id="routeButton">Route</button>
             </div>
         </div>

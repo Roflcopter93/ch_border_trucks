@@ -9,6 +9,10 @@ let currentCutoffTime = 17;
 document.addEventListener('DOMContentLoaded', function() {
     initializeMap();
     setupEventListeners();
+    const dateInput = document.getElementById('departureDate');
+    if (dateInput) {
+        dateInput.value = new Date().toISOString().split('T')[0];
+    }
 });
 
 function initializeMap() {
@@ -31,9 +35,6 @@ function initializeMap() {
     
     // Add customs crossing markers
     addCustomsMarkers();
-    
-    // Add destination markers
-    addDestinationMarkers();
     
 }
 
@@ -216,15 +217,21 @@ function updateDestinationPopups() {
 
 async function handleRouteSearch() {
     const postalInput = document.getElementById('postalInput');
-    const departureInput = document.getElementById('departureInput');
+    const departureTimeInput = document.getElementById('departureTime');
+    const departureDateInput = document.getElementById('departureDate');
     const postalCode = postalInput.value.trim();
     if (!postalCode) {
         alert('Bitte PLZ eingeben');
         return;
     }
 
-    const departureTime = departureInput.value.trim() || '06:00';
-    if (!/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(departureTime)) {
+    const departTime = departureTimeInput.value.trim();
+    const departDate = departureDateInput.value.trim();
+    if (!departTime || !departDate) {
+        alert('Bitte Datum und Uhrzeit angeben');
+        return;
+    }
+    if (!/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(departTime)) {
         alert('Bitte Zeit im Format HH:MM angeben');
         return;
     }
@@ -235,7 +242,7 @@ async function handleRouteSearch() {
             alert('Ort nicht gefunden');
             return;
         }
-        await planRoute(destInfo, departureTime);
+        await planRoute(destInfo, departDate, departTime);
     } catch (e) {
         console.error(e);
         alert('Fehler bei der Routenberechnung');
@@ -267,7 +274,7 @@ function getNearestCustoms(point) {
     return nearest;
 }
 
-async function planRoute(destInfo, departTimeStr) {
+async function planRoute(destInfo, departDateStr, departTimeStr) {
     const destCoords = destInfo.coords;
     const postalCodeDisplay = destInfo.name;
     // Remove previous dynamic routes
@@ -286,12 +293,12 @@ async function planRoute(destInfo, departTimeStr) {
     const poly = L.polyline(fullCoords.map(c => [c[0], c[1]]), { color: '#8e44ad', weight: 5 }).addTo(map);
     routeLines.push(poly);
 
-    const departDate = getDepartureDate(departTimeStr);
-    let arrivalAtCustoms = new Date(departDate.getTime() + first.duration * 1000);
-    arrivalAtCustoms = adjustForCustoms(arrivalAtCustoms, customs.schedule);
+    const departDate = getDepartureDate(departDateStr, departTimeStr);
+    const firstLeg = driveSegment(departDate, first.duration / 3600, 0);
+    let arrivalAtCustoms = adjustForCustoms(firstLeg.time, customs.schedule);
     arrivalAtCustoms = new Date(arrivalAtCustoms.getTime() + (customs.averageWaitingMinutes || 0) * 60000);
-    let arrivalDestination = new Date(arrivalAtCustoms.getTime() + second.duration * 1000);
-    arrivalDestination = adjustForWeekend(arrivalDestination);
+    const secondLeg = driveSegment(arrivalAtCustoms, second.duration / 3600, firstLeg.hoursToday);
+    let arrivalDestination = adjustForWeekend(secondLeg.time);
 
     if (destinationMarker) {
         destinationMarker.setLatLng(destCoords);
@@ -299,7 +306,10 @@ async function planRoute(destInfo, departTimeStr) {
         destinationMarker = L.marker(destCoords).addTo(map);
     }
     destinationMarker
-        .bindPopup(`Früheste Ankunft (${postalCodeDisplay}): ${formatDate(arrivalDestination)}`)
+        .bindPopup(
+            `Ankunft Zoll (${customs.name}): ${formatDate(arrivalAtCustoms)}<br>` +
+            `Früheste Ankunft (${postalCodeDisplay}): ${formatDate(arrivalDestination)}`
+        )
         .openPopup();
     map.fitBounds(poly.getBounds(), { padding: [20, 20] });
 }
@@ -317,11 +327,33 @@ async function fetchRoute(a, b) {
     };
 }
 
-function getDepartureDate(timeStr) {
+function driveSegment(startTime, durationHours, hoursToday) {
+    let time = new Date(startTime);
+    let remaining = durationHours;
+    let driven = hoursToday;
+    while (remaining > 0) {
+        const timeUntilBreak = 5 - (driven % 5);
+        const timeUntilLimit = 9 - driven;
+        let drive = Math.min(remaining, timeUntilBreak, timeUntilLimit);
+        time = new Date(time.getTime() + drive * 3600000);
+        remaining -= drive;
+        driven += drive;
+        if (remaining <= 0) break;
+        if (driven % 5 === 0 && driven < 9) {
+            time = new Date(time.getTime() + 45 * 60000);
+        }
+        if (driven >= 9) {
+            time = new Date(time.getTime() + 11 * 3600000);
+            driven = 0;
+        }
+    }
+    return { time, hoursToday: driven };
+}
+
+function getDepartureDate(dateStr, timeStr) {
+    const [y, mo, d] = dateStr.split('-').map(Number);
     const [h, m] = timeStr.split(':').map(Number);
-    const now = new Date();
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
-    return d;
+    return new Date(y, mo - 1, d, h, m, 0, 0);
 }
 
 function adjustForCustoms(arrival, schedule) {
