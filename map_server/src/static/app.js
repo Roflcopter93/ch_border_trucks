@@ -3,6 +3,7 @@ let map;
 let routeLines = [];
 let animatedMarkers = [];
 let destinationMarker = null;
+let customsMarkers = [];
 let currentCutoffTime = 17;
 
 // Initialize map when page loads
@@ -68,35 +69,41 @@ function addStartPointMarker() {
         .addTo(map);
 }
 
+function createCustomsIcon(active = false) {
+    const size = active ? 30 : 25;
+    const color = active ? '#c0392b' : '#f39c12';
+    return L.divIcon({
+        className: 'custom-div-icon',
+        html: `<div style="
+            background-color: ${color};
+            width: ${size}px;
+            height: ${size}px;
+            border-radius: 4px;
+            border: 2px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+        ">🛃</div>`,
+        iconSize: [size, size],
+        iconAnchor: [size/2, size/2]
+    });
+}
+
 function addCustomsMarkers() {
     mapData.customsPoints.forEach(customs => {
-        const customsIcon = L.divIcon({
-            className: 'custom-div-icon',
-            html: `<div style="
-                background-color: #f39c12;
-                width: 25px;
-                height: 25px;
-                border-radius: 4px;
-                border: 2px solid white;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                color: white;
-                font-weight: bold;
-                font-size: 12px;
-            ">🛃</div>`,
-            iconSize: [25, 25],
-            iconAnchor: [12.5, 12.5]
-        });
-
-        L.marker(customs.coords, { icon: customsIcon })
+        const marker = L.marker(customs.coords, { icon: createCustomsIcon() })
             .bindPopup(`
                 <div class="popup-title">${customs.name}</div>
                 <div class="popup-info"><strong>Opening Hours:</strong><br>${customs.openingHours}</div>
                 <div class="popup-info"><strong>Truck Waiting Times:</strong><br>${customs.waitingTimes}</div>
             `)
             .addTo(map);
+        customs.marker = marker;
+        customsMarkers.push(marker);
     });
 }
 
@@ -231,8 +238,15 @@ async function handleRouteSearch() {
         alert('Bitte Datum und Uhrzeit angeben');
         return;
     }
-    if (!/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(departTime)) {
+    const match = departTime.match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) {
         alert('Bitte Zeit im Format HH:MM angeben');
+        return;
+    }
+    const h = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+    if (h < 6 || (h === 6 && m < 30) || h > 16 || (h === 16 && m > 0)) {
+        alert('Abfahrtszeit nur zwischen 06:30 und 16:00');
         return;
     }
 
@@ -290,15 +304,28 @@ async function planRoute(destInfo, departDateStr, departTimeStr) {
     const second = await fetchRoute(customs.coords, destCoords);
 
     const fullCoords = [...first.coords, ...second.coords.slice(1)];
-    const poly = L.polyline(fullCoords.map(c => [c[0], c[1]]), { color: '#8e44ad', weight: 5 }).addTo(map);
-    routeLines.push(poly);
+    const BREAK_HOURS = 4.5;
+    const breakDist = BREAK_HOURS * 70 * 1000;
+    const [preBreak, postBreak] = splitRouteAtDistance(fullCoords, breakDist);
+
+    const poly1 = L.polyline(preBreak, { color: '#8e44ad', weight: 5 }).addTo(map);
+    routeLines.push(poly1);
+    if (postBreak.length > 1) {
+        const poly2 = L.polyline(postBreak, { color: '#e67e22', weight: 5, dashArray: '8 8' }).addTo(map);
+        routeLines.push(poly2);
+    }
 
     const departDate = getDepartureDate(departDateStr, departTimeStr);
     const firstLeg = driveSegment(departDate, first.duration / 3600, 0);
     let arrivalAtCustoms = adjustForCustoms(firstLeg.time, customs.schedule);
-    arrivalAtCustoms = new Date(arrivalAtCustoms.getTime() + (customs.averageWaitingMinutes || 0) * 60000);
+    arrivalAtCustoms = new Date(arrivalAtCustoms.getTime() + ((customs.averageWaitingMinutes || 0) + 30) * 60000);
     const secondLeg = driveSegment(arrivalAtCustoms, second.duration / 3600, firstLeg.hoursToday);
     let arrivalDestination = adjustForWeekend(secondLeg.time);
+    arrivalDestination = new Date(arrivalDestination.getTime() + 20 * 60000);
+
+    highlightCustoms(customs);
+
+    const distanceKm = ((first.distance + second.distance) / 1000).toFixed(0);
 
     if (destinationMarker) {
         destinationMarker.setLatLng(destCoords);
@@ -308,10 +335,11 @@ async function planRoute(destInfo, departDateStr, departTimeStr) {
     destinationMarker
         .bindPopup(
             `Ankunft Zoll (${customs.name}): ${formatDate(arrivalAtCustoms)}<br>` +
-            `Früheste Ankunft (${postalCodeDisplay}): ${formatDate(arrivalDestination)}`
+            `Früheste Ankunft (${postalCodeDisplay}): ${formatDate(arrivalDestination)}<br>` +
+            `Distanz: ${distanceKm} km`
         )
         .openPopup();
-    map.fitBounds(poly.getBounds(), { padding: [20, 20] });
+    map.fitBounds(poly1.getBounds(), { padding: [20, 20] });
 }
 
 async function fetchRoute(a, b) {
@@ -323,27 +351,32 @@ async function fetchRoute(a, b) {
     const duration = route.distance / speedMS; // seconds
     return {
         coords: route.geometry.coordinates.map(c => [c[1], c[0]]),
-        duration
+        duration,
+        distance: route.distance
     };
 }
 
 function driveSegment(startTime, durationHours, hoursToday) {
+    const BREAK_INTERVAL = 4.5;
+    const DAILY_LIMIT = 9;
+    const BREAK_MINUTES = 45;
+    const REST_HOURS = 11;
     let time = new Date(startTime);
     let remaining = durationHours;
     let driven = hoursToday;
     while (remaining > 0) {
-        const timeUntilBreak = 5 - (driven % 5);
-        const timeUntilLimit = 9 - driven;
-        let drive = Math.min(remaining, timeUntilBreak, timeUntilLimit);
+        const untilBreak = BREAK_INTERVAL - (driven % BREAK_INTERVAL);
+        const untilLimit = DAILY_LIMIT - driven;
+        const drive = Math.min(remaining, untilBreak, untilLimit);
         time = new Date(time.getTime() + drive * 3600000);
         remaining -= drive;
         driven += drive;
         if (remaining <= 0) break;
-        if (driven % 5 === 0 && driven < 9) {
-            time = new Date(time.getTime() + 45 * 60000);
+        if (Math.abs(driven % BREAK_INTERVAL) < 0.0001 && driven < DAILY_LIMIT) {
+            time = new Date(time.getTime() + BREAK_MINUTES * 60000);
         }
-        if (driven >= 9) {
-            time = new Date(time.getTime() + 11 * 3600000);
+        if (driven >= DAILY_LIMIT) {
+            time = new Date(time.getTime() + REST_HOURS * 3600000);
             driven = 0;
         }
     }
@@ -398,5 +431,40 @@ function adjustForWeekend(date) {
 
 function formatDate(d) {
     return d.toLocaleString('de-CH', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+}
+
+function haversine(a, b) {
+    const R = 6371000;
+    const toRad = deg => deg * Math.PI / 180;
+    const dLat = toRad(b[0] - a[0]);
+    const dLon = toRad(b[1] - a[1]);
+    const lat1 = toRad(a[0]);
+    const lat2 = toRad(b[0]);
+    const x = dLat / 2;
+    const y = dLon / 2;
+    const h = Math.sin(x) * Math.sin(x) + Math.cos(lat1) * Math.cos(lat2) * Math.sin(y) * Math.sin(y);
+    return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function splitRouteAtDistance(coords, dist) {
+    let acc = 0;
+    for (let i = 0; i < coords.length - 1; i++) {
+        const seg = haversine(coords[i], coords[i + 1]);
+        if (acc + seg >= dist) {
+            const ratio = (dist - acc) / seg;
+            const lat = coords[i][0] + ratio * (coords[i + 1][0] - coords[i][0]);
+            const lng = coords[i][1] + ratio * (coords[i + 1][1] - coords[i][1]);
+            const splitPoint = [lat, lng];
+            return [coords.slice(0, i + 1).concat([splitPoint]), [splitPoint].concat(coords.slice(i + 1))];
+        }
+        acc += seg;
+    }
+    return [coords, []];
+}
+
+function highlightCustoms(selected) {
+    mapData.customsPoints.forEach(cp => {
+        if (cp.marker) cp.marker.setIcon(createCustomsIcon(cp === selected));
+    });
 }
 
