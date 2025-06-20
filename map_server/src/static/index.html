@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Logistics Map - Pöchlarn to Switzerland</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50, #3498db);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 2.2em;
+            font-weight: 300;
+        }
+
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .map-container {
+            position: relative;
+            height: 80vh;
+            margin: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+
+        .legend {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            z-index: 1000;
+            min-width: 250px;
+            backdrop-filter: blur(10px);
+        }
+
+        .legend h3 {
+            margin: 0 0 15px 0;
+            color: #2c3e50;
+            font-size: 1.2em;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 8px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 12px 0;
+            font-size: 0.95em;
+        }
+
+        .legend-line {
+            width: 30px;
+            height: 4px;
+            margin-right: 12px;
+            border-radius: 2px;
+        }
+
+        .legend-line.standard {
+            background-color: #2980b9;
+        }
+
+        .legend-line.optimized {
+            background: repeating-linear-gradient(
+                to right,
+                #27ae60 0px,
+                #27ae60 8px,
+                transparent 8px,
+                transparent 16px
+            );
+            height: 4px;
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .controls h4 {
+            margin: 0 0 15px 0;
+            color: #2c3e50;
+            font-size: 1.1em;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .slider {
+            flex: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: #ddd;
+            outline: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+
+        .slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+
+        .time-display {
+            font-weight: bold;
+            color: #2c3e50;
+            min-width: 60px;
+            text-align: center;
+            background: #ecf0f1;
+            padding: 8px 12px;
+            border-radius: 6px;
+        }
+
+        /* Custom popup styles */
+        .leaflet-popup-content-wrapper {
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+
+        .leaflet-popup-content {
+            margin: 15px;
+        }
+
+        .popup-title {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .popup-info {
+            margin: 8px 0;
+            font-size: 0.95em;
+        }
+
+        .popup-time {
+            color: #27ae60;
+            font-weight: bold;
+        }
+
+        .popup-time.delayed {
+            color: #e74c3c;
+        }
+
+        /* Animation for moving markers */
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .pulsing-marker {
+            animation: pulse 2s infinite;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .legend, .controls {
+                position: relative;
+                margin: 10px;
+                width: auto;
+            }
+            
+            .map-container {
+                height: 60vh;
+                margin: 10px;
+            }
+            
+            .header h1 {
+                font-size: 1.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Interactive Logistics Map</h1>
+        <p>Routes from AT-3380 Pöchlarn to Switzerland - Transit Time Visualization</p>
+    </div>
+
+    <div class="map-container">
+        <div id="map"></div>
+        
+        <div class="legend">
+            <h3>Legend</h3>
+            <div class="legend-item">
+                <div class="legend-line standard"></div>
+                <span>A → B (Standard-Direkt)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-line optimized"></div>
+                <span>A → C (Westschweiz-Optimierung)</span>
+            </div>
+            <div class="legend-item">
+                <div style="width: 30px; height: 20px; margin-right: 12px; background: #e74c3c; border-radius: 3px; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px;">📍</div>
+                <span>Pfeilgeschwindigkeit = Transitdauer</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <h4>Cut-off-Zeit in Pöchlarn</h4>
+            <div class="slider-container">
+                <input type="range" min="0" max="23" value="17" class="slider" id="cutoffSlider">
+                <div class="time-display" id="timeDisplay">17:00</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Map Data -->
+    <script src="map_data.js"></script>
+    
+    <!-- Main Application Script -->
+    <script src="app.js"></script>
+</body>
+</html>
+
