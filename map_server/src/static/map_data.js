@@ -8,17 +8,17 @@ const mapData = {
         {
             name: "DE/CH Waldshut",
             coords: [47.6170431, 8.2451662],
-            icon: "customs_icon.png", // Placeholder, will need to create/find this
-            openingHours: "Mon-Fri: 06:00-22:00, Sat: 06:00-14:00, Sun: Closed",
+            icon: "customs_icon.png",
+            openingHours: "Mon-Fri: 07:00-19:00, Sat-Sun: Closed",
             waitingTimes: "Trucks: 15-30 min",
             averageWaitingMinutes: 20,
             schedule: {
-                Mon: [6, 22],
-                Tue: [6, 22],
-                Wed: [6, 22],
-                Thu: [6, 22],
-                Fri: [6, 22],
-                Sat: [6, 14],
+                Mon: [7, 19],
+                Tue: [7, 19],
+                Wed: [7, 19],
+                Thu: [7, 19],
+                Fri: [7, 19],
+                Sat: null,
                 Sun: null
             }
         },
@@ -26,33 +26,33 @@ const mapData = {
             name: "IT/CH Chiasso",
             coords: [45.833, 9.033],
             icon: "customs_icon.png",
-            openingHours: "Mon-Sun: 24/7",
+            openingHours: "Mon-Fri: 06:00-19:30, Sat-Sun: Closed",
             waitingTimes: "Trucks: 5-15 min",
             averageWaitingMinutes: 10,
             schedule: {
-                Mon: [0, 24],
-                Tue: [0, 24],
-                Wed: [0, 24],
-                Thu: [0, 24],
-                Fri: [0, 24],
-                Sat: [0, 24],
-                Sun: [0, 24]
+                Mon: [6, 19.5],
+                Tue: [6, 19.5],
+                Wed: [6, 19.5],
+                Thu: [6, 19.5],
+                Fri: [6, 19.5],
+                Sat: null,
+                Sun: null
             }
         },
         {
             name: "DE/CH Thayngen",
             coords: [47.740425, 8.718055],
             icon: "customs_icon.png",
-            openingHours: "Mon-Fri: 05:00-21:00, Sat: 06:00-13:00, Sun: Closed",
+            openingHours: "Mon-Fri: 07:00-17:30, Sat-Sun: Closed",
             waitingTimes: "Trucks: 10-20 min",
             averageWaitingMinutes: 15,
             schedule: {
-                Mon: [5, 21],
-                Tue: [5, 21],
-                Wed: [5, 21],
-                Thu: [5, 21],
-                Fri: [5, 21],
-                Sat: [6, 13],
+                Mon: [7, 17.5],
+                Tue: [7, 17.5],
+                Wed: [7, 17.5],
+                Thu: [7, 17.5],
+                Fri: [7, 17.5],
+                Sat: null,
                 Sun: null
             }
         },
@@ -60,33 +60,33 @@ const mapData = {
             name: "DE/CH Rheinfelden",
             coords: [47.56111, 7.79167],
             icon: "customs_icon.png",
-            openingHours: "Mon-Fri: 06:00-20:00, Sat: 07:00-12:00, Sun: Closed",
+            openingHours: "Mon-Fri: 10:00-18:00, Sat-Sun: Closed",
             waitingTimes: "Trucks: 5-10 min",
             averageWaitingMinutes: 8,
             schedule: {
-                Mon: [6, 20],
-                Tue: [6, 20],
-                Wed: [6, 20],
-                Thu: [6, 20],
-                Fri: [6, 20],
-                Sat: [7, 12],
+                Mon: [10, 18],
+                Tue: [10, 18],
+                Wed: [10, 18],
+                Thu: [10, 18],
+                Fri: [10, 18],
+                Sat: null,
                 Sun: null
             }
         },
         {
             name: "AT/CH Wolfurt",
-            coords: [47.4562236, 9.7451662], // Approximate, based on customs office location
+            coords: [47.4562236, 9.7451662],
             icon: "customs_icon.png",
-            openingHours: "Mon-Fri: 06:00-22:00, Sat: 06:00-14:00, Sun: Closed",
+            openingHours: "Mon-Fri: 06:00-16:00, Sat-Sun: Closed",
             waitingTimes: "Trucks: 10-25 min",
             averageWaitingMinutes: 18,
             schedule: {
-                Mon: [6, 22],
-                Tue: [6, 22],
-                Wed: [6, 22],
-                Thu: [6, 22],
-                Fri: [6, 22],
-                Sat: [6, 14],
+                Mon: [6, 16],
+                Tue: [6, 16],
+                Wed: [6, 16],
+                Thu: [6, 16],
+                Fri: [6, 16],
+                Sat: null,
                 Sun: null
             }
         },
@@ -94,17 +94,17 @@ const mapData = {
             name: "AT/CH Tisis",
             coords: [47.066667, 9.6],
             icon: "customs_icon.png",
-            openingHours: "Mon-Sun: 24/7",
+            openingHours: "Mon-Fri: 07:00-18:00, Sat-Sun: Closed",
             waitingTimes: "Trucks: 5-10 min",
             averageWaitingMinutes: 7,
             schedule: {
-                Mon: [0, 24],
-                Tue: [0, 24],
-                Wed: [0, 24],
-                Thu: [0, 24],
-                Fri: [0, 24],
-                Sat: [0, 24],
-                Sun: [0, 24]
+                Mon: [7, 18],
+                Tue: [7, 18],
+                Wed: [7, 18],
+                Thu: [7, 18],
+                Fri: [7, 18],
+                Sat: null,
+                Sun: null
             }
         }
     ],

@@ -2,6 +2,7 @@
 let map;
 let routeLines = [];
 let animatedMarkers = [];
+let destinationMarker = null;
 let currentCutoffTime = 17;
 
 // Initialize map when page loads
@@ -120,12 +121,12 @@ function addDestinationMarkers() {
             iconAnchor: [14, 14]
         });
 
-        const marker = L.marker(destination.coords, { icon: destIcon })
+        destinationMarker = L.marker(destination.coords, { icon: destIcon })
             .bindPopup(generateDestinationPopup(destination))
             .addTo(map);
 
         // Add hover event for dynamic popup updates
-        marker.on('mouseover', function() {
+        destinationMarker.on('mouseover', function() {
             this.openPopup();
         });
     });
@@ -292,8 +293,14 @@ async function planRoute(destInfo, departTimeStr) {
     let arrivalDestination = new Date(arrivalAtCustoms.getTime() + second.duration * 1000);
     arrivalDestination = adjustForWeekend(arrivalDestination);
 
-    const marker = L.marker(destCoords).addTo(map);
-    marker.bindPopup(`Früheste Ankunft (${postalCodeDisplay}): ${formatDate(arrivalDestination)}`).openPopup();
+    if (destinationMarker) {
+        destinationMarker.setLatLng(destCoords);
+    } else {
+        destinationMarker = L.marker(destCoords).addTo(map);
+    }
+    destinationMarker
+        .bindPopup(`Früheste Ankunft (${postalCodeDisplay}): ${formatDate(arrivalDestination)}`)
+        .openPopup();
     map.fitBounds(poly.getBounds(), { padding: [20, 20] });
 }
 
@@ -314,9 +321,6 @@ function getDepartureDate(timeStr) {
     const [h, m] = timeStr.split(':').map(Number);
     const now = new Date();
     const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
-    if (d < now) {
-        d.setDate(d.getDate() + 1);
-    }
     return d;
 }
 
@@ -333,11 +337,14 @@ function adjustForCustoms(arrival, schedule) {
             continue;
         }
         const [open, close] = hours;
-        if (date.getHours() < open) {
-            date.setHours(open,0,0,0);
+        const currentHour = date.getHours() + date.getMinutes() / 60;
+        if (currentHour < open) {
+            const oh = Math.floor(open);
+            const om = Math.round((open - oh) * 60);
+            date.setHours(oh, om, 0, 0);
             break;
         }
-        if (date.getHours() >= close) {
+        if (currentHour >= close) {
             date.setDate(date.getDate() + 1);
             date.setHours(0,0,0,0);
             continue;
