@@ -34,8 +34,6 @@ function initializeMap() {
     // Add destination markers
     addDestinationMarkers();
     
-    // Draw initial routes
-    drawRoutes();
 }
 
 function addStartPointMarker() {
@@ -185,96 +183,9 @@ function calculateArrivalTime(transitHours) {
     };
 }
 
-function drawRoutes() {
-    // Clear existing routes
-    routeLines.forEach(line => map.removeLayer(line));
-    routeLines = [];
-
-    mapData.destinations.forEach(destination => {
-        // Draw A → B route (Standard-Direkt) - Blue solid line
-        const routeA_B = L.polyline([
-            mapData.startPoint.coords,
-            destination.coords
-        ], {
-            color: '#2980b9',
-            weight: 4,
-            opacity: 0.8
-        }).addTo(map);
-        
-        routeLines.push(routeA_B);
-
-        // Draw A → C route (Westschweiz-Optimierung) - Green dashed line
-        const routeA_C = L.polyline([
-            mapData.startPoint.coords,
-            destination.coords
-        ], {
-            color: '#27ae60',
-            weight: 4,
-            opacity: 0.8,
-            dashArray: '10, 10'
-        }).addTo(map);
-        
-        routeLines.push(routeA_C);
-
-        // Add animated arrows for transit time visualization
-        addAnimatedArrows(routeA_B, destination.routes.A_B.transitTimeHours, '#2980b9');
-        addAnimatedArrows(routeA_C, destination.routes.A_C.transitTimeHours, '#27ae60');
-    });
-}
-
-function addAnimatedArrows(polyline, transitHours, color) {
-    // Create animated arrows along the route
-    // Speed is inversely proportional to transit time (faster animation = shorter transit)
-    const animationSpeed = Math.max(1000, 5000 - (transitHours * 100)); // Faster for shorter times
-    
-    // Get route coordinates
-    const latlngs = polyline.getLatLngs();
-    if (latlngs.length < 2) return;
-    
-    // Create multiple arrow markers along the route
-    const numArrows = 3;
-    for (let i = 0; i < numArrows; i++) {
-        const progress = (i + 1) / (numArrows + 1);
-        const lat = latlngs[0].lat + (latlngs[1].lat - latlngs[0].lat) * progress;
-        const lng = latlngs[0].lng + (latlngs[1].lng - latlngs[0].lng) * progress;
-        
-        const arrowIcon = L.divIcon({
-            className: 'custom-div-icon',
-            html: `<div style="
-                color: ${color};
-                font-size: 16px;
-                text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
-                animation: pulse ${animationSpeed}ms infinite;
-                animation-delay: ${i * (animationSpeed / numArrows)}ms;
-            ">➤</div>`,
-            iconSize: [16, 16],
-            iconAnchor: [8, 8]
-        });
-        
-        const arrowMarker = L.marker([lat, lng], { icon: arrowIcon }).addTo(map);
-        animatedMarkers.push(arrowMarker);
-    }
-}
 
 function setupEventListeners() {
-    const slider = document.getElementById('cutoffSlider');
-    const timeDisplay = document.getElementById('timeDisplay');
     const routeButton = document.getElementById('routeButton');
-
-    slider.addEventListener('input', function() {
-        currentCutoffTime = parseInt(this.value);
-        timeDisplay.textContent = `${currentCutoffTime}:00`;
-        
-        // Update popup cutoff time display
-        const popupCutoff = document.getElementById('popup-cutoff');
-        if (popupCutoff) {
-            popupCutoff.textContent = `${currentCutoffTime}:00`;
-        }
-        
-        // Refresh destination popups with new arrival times
-        updateDestinationPopups();
-    });
-
     if (routeButton) {
         routeButton.addEventListener('click', handleRouteSearch);
     }
@@ -310,7 +221,11 @@ async function handleRouteSearch() {
         return;
     }
 
-    const departureTime = departureInput.value || '06:00';
+    const departureTime = departureInput.value.trim() || '06:00';
+    if (!/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(departureTime)) {
+        alert('Bitte Zeit im Format HH:MM angeben');
+        return;
+    }
 
     try {
         const destCoords = await geocodePostalCode(postalCode);
