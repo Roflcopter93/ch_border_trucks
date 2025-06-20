@@ -110,6 +110,7 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             z-index: 1000;
             backdrop-filter: blur(10px);
+            min-width: 260px;
         }
 
         .controls h4 {
@@ -122,6 +123,29 @@
             display: flex;
             align-items: center;
             gap: 15px;
+        }
+
+        .route-form {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .route-form input[type="text"],
+        .route-form input[type="time"] {
+            padding: 6px 8px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            flex: 1;
+        }
+
+        .route-form button {
+            padding: 6px 12px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
         }
 
         .slider {
@@ -256,6 +280,12 @@
             <div class="slider-container">
                 <input type="range" min="0" max="23" value="17" class="slider" id="cutoffSlider">
                 <div class="time-display" id="timeDisplay">17:00</div>
+            </div>
+
+            <div class="route-form">
+                <input type="text" id="postalInput" placeholder="Ziel-PLZ">
+                <input type="time" id="departureInput" value="06:00">
+                <button id="routeButton">Route</button>
             </div>
         </div>
     </div>

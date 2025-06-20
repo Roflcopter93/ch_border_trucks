@@ -259,7 +259,8 @@ function addAnimatedArrows(polyline, transitHours, color) {
 function setupEventListeners() {
     const slider = document.getElementById('cutoffSlider');
     const timeDisplay = document.getElementById('timeDisplay');
-    
+    const routeButton = document.getElementById('routeButton');
+
     slider.addEventListener('input', function() {
         currentCutoffTime = parseInt(this.value);
         timeDisplay.textContent = `${currentCutoffTime}:00`;
@@ -273,6 +274,10 @@ function setupEventListeners() {
         // Refresh destination popups with new arrival times
         updateDestinationPopups();
     });
+
+    if (routeButton) {
+        routeButton.addEventListener('click', handleRouteSearch);
+    }
 }
 
 function updateDestinationPopups() {
@@ -294,5 +299,129 @@ function updateDestinationPopups() {
             }
         }
     });
+}
+
+async function handleRouteSearch() {
+    const postalInput = document.getElementById('postalInput');
+    const departureInput = document.getElementById('departureInput');
+    const postalCode = postalInput.value.trim();
+    if (!postalCode) {
+        alert('Bitte PLZ eingeben');
+        return;
+    }
+
+    const departureTime = departureInput.value || '06:00';
+
+    try {
+        const destCoords = await geocodePostalCode(postalCode);
+        if (!destCoords) {
+            alert('Ort nicht gefunden');
+            return;
+        }
+        await planRoute(destCoords, departureTime);
+    } catch (e) {
+        console.error(e);
+        alert('Fehler bei der Routenberechnung');
+    }
+}
+
+async function geocodePostalCode(postal) {
+    const url = `https://nominatim.openstreetmap.org/search?country=ch&postalcode=${encodeURIComponent(postal)}&format=json&limit=1`;
+    const resp = await fetch(url, { headers: { 'Accept-Language': 'de' } });
+    const data = await resp.json();
+    if (data && data.length > 0) {
+        return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+    }
+    return null;
+}
+
+function getNearestCustoms(point) {
+    let nearest = null;
+    let minDist = Infinity;
+    mapData.customsPoints.forEach(cp => {
+        const dist = Math.hypot(point[0] - cp.coords[0], point[1] - cp.coords[1]);
+        if (dist < minDist) {
+            minDist = dist;
+            nearest = cp;
+        }
+    });
+    return nearest;
+}
+
+async function planRoute(destCoords, departTimeStr) {
+    // Remove previous dynamic routes
+    routeLines.forEach(l => map.removeLayer(l));
+    animatedMarkers.forEach(m => map.removeLayer(m));
+    routeLines = [];
+    animatedMarkers = [];
+
+    const customs = getNearestCustoms(destCoords);
+    const start = mapData.startPoint.coords;
+
+    const first = await fetchRoute(start, customs.coords);
+    const second = await fetchRoute(customs.coords, destCoords);
+
+    const fullCoords = [...first.coords, ...second.coords.slice(1)];
+    const poly = L.polyline(fullCoords.map(c => [c[0], c[1]]), { color: '#8e44ad', weight: 5 }).addTo(map);
+    routeLines.push(poly);
+
+    const departDate = getDepartureDate(departTimeStr);
+    let arrivalAtCustoms = new Date(departDate.getTime() + first.duration * 1000);
+    arrivalAtCustoms = adjustForCustoms(arrivalAtCustoms, customs.schedule);
+    arrivalAtCustoms = new Date(arrivalAtCustoms.getTime() + (customs.averageWaitingMinutes || 0) * 60000);
+    const arrivalDestination = new Date(arrivalAtCustoms.getTime() + second.duration * 1000);
+
+    const marker = L.marker(destCoords).addTo(map);
+    marker.bindPopup(`Früheste Ankunft: ${formatDate(arrivalDestination)}`).openPopup();
+    map.fitBounds(poly.getBounds(), { padding: [20, 20] });
+}
+
+async function fetchRoute(a, b) {
+    const url = `https://router.project-osrm.org/route/v1/driving/${a[1]},${a[0]};${b[1]},${b[0]}?overview=full&geometries=geojson`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    const route = data.routes[0];
+    return { coords: route.geometry.coordinates.map(c => [c[1], c[0]]), duration: route.duration };
+}
+
+function getDepartureDate(timeStr) {
+    const [h, m] = timeStr.split(':').map(Number);
+    const now = new Date();
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
+    if (d < now) {
+        d.setDate(d.getDate() + 1);
+    }
+    return d;
+}
+
+function adjustForCustoms(arrival, schedule) {
+    let date = new Date(arrival);
+    for (let i = 0; i < 7; i++) {
+        const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+        const dayName = dayNames[date.getDay()];
+        const hours = schedule[dayName];
+        if (!hours) {
+            // closed whole day
+            date.setDate(date.getDate() + 1);
+            date.setHours(0,0,0,0);
+            continue;
+        }
+        const [open, close] = hours;
+        if (date.getHours() < open) {
+            date.setHours(open,0,0,0);
+            break;
+        }
+        if (date.getHours() >= close) {
+            date.setDate(date.getDate() + 1);
+            date.setHours(0,0,0,0);
+            continue;
+        }
+        break;
+    }
+    return date;
+}
+
+function formatDate(d) {
+    return d.toLocaleString('de-CH', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
 }
 
