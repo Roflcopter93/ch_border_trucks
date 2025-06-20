@@ -78,7 +78,8 @@
 
         .route-form input[type="text"],
         .route-form input[type="date"],
-        .route-form input[type="time"] {
+        .route-form select,
+        .route-form input[type="range"] {
             padding: 6px 8px;
             border-radius: 4px;
             border: 1px solid #ccc;
@@ -170,9 +171,18 @@
         <div class="controls">
             <h4>Routenplanung</h4>
             <div class="route-form">
+                <select id="startSelect">
+                    <option>AT-3380 Pöchlarn</option>
+                    <option>AT-4550 Kremsmünster</option>
+                    <option>CH-1162 St. Prex</option>
+                    <option>CH-4614 Hägendorf</option>
+                </select>
                 <input type="text" id="postalInput" placeholder="Ziel-PLZ">
                 <input type="date" id="departureDate">
-                <input type="time" id="departureTime" value="06:30" step="60">
+            </div>
+            <div class="route-form" style="align-items:center;">
+                <input type="range" id="timeSlider" min="6" max="17" value="6.5" step="0.25">
+                <span id="timeDisplay" style="width:50px;text-align:center;">06:30</span>
                 <button id="routeButton">Route</button>
             </div>
         </div>

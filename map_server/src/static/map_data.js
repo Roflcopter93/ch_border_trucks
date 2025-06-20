@@ -1,8 +1,15 @@
 const mapData = {
+    startOptions: [
+        { name: "AT-3380 Pöchlarn", coords: [48.2119, 15.209], popup: "Start Hub", isSwiss: false },
+        { name: "AT-4550 Kremsmünster", coords: [48.045, 14.128], popup: "Start Hub", isSwiss: false },
+        { name: "CH-1162 St. Prex", coords: [46.484, 6.459], popup: "Start Hub", isSwiss: true },
+        { name: "CH-4614 Hägendorf", coords: [47.335, 7.862], popup: "Start Hub", isSwiss: true }
+    ],
     startPoint: {
         name: "AT-3380 Pöchlarn",
         coords: [48.2119, 15.209],
-        popup: "Start Hub"
+        popup: "Start Hub",
+        isSwiss: false
     },
     customsPoints: [
         {

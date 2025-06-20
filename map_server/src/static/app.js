@@ -4,6 +4,8 @@ let routeLines = [];
 let animatedMarkers = [];
 let destinationMarker = null;
 let customsMarkers = [];
+let startMarker = null;
+let currentStart = mapData.startPoint;
 let currentCutoffTime = 17;
 
 // Initialize map when page loads
@@ -60,10 +62,10 @@ function addStartPointMarker() {
         iconAnchor: [15, 15]
     });
 
-    L.marker(mapData.startPoint.coords, { icon: startIcon })
+    startMarker = L.marker(currentStart.coords, { icon: startIcon })
         .bindPopup(`
-            <div class="popup-title">${mapData.startPoint.popup}</div>
-            <div class="popup-info"><strong>Location:</strong> ${mapData.startPoint.name}</div>
+            <div class="popup-title">${currentStart.popup}</div>
+            <div class="popup-info"><strong>Location:</strong> ${currentStart.name}</div>
             <div class="popup-info"><strong>Current Cut-off:</strong> <span id="popup-cutoff">${currentCutoffTime}:00</span></div>
         `)
         .addTo(map);
@@ -199,6 +201,22 @@ function setupEventListeners() {
     if (routeButton) {
         routeButton.addEventListener('click', handleRouteSearch);
     }
+    const slider = document.getElementById('timeSlider');
+    const display = document.getElementById('timeDisplay');
+    if (slider && display) {
+        const update = () => {
+            const val = parseFloat(slider.value);
+            display.textContent = minutesToTime(val * 60);
+        };
+        slider.addEventListener('input', update);
+        update();
+    }
+    const startSelect = document.getElementById('startSelect');
+    if (startSelect) {
+        startSelect.addEventListener('change', () => {
+            setStartLocation(startSelect.value);
+        });
+    }
 }
 
 function updateDestinationPopups() {
@@ -224,7 +242,7 @@ function updateDestinationPopups() {
 
 async function handleRouteSearch() {
     const postalInput = document.getElementById('postalInput');
-    const departureTimeInput = document.getElementById('departureTime');
+    const departureSlider = document.getElementById('timeSlider');
     const departureDateInput = document.getElementById('departureDate');
     const postalCode = postalInput.value.trim();
     if (!postalCode) {
@@ -232,21 +250,10 @@ async function handleRouteSearch() {
         return;
     }
 
-    const departTime = departureTimeInput.value.trim();
+    const departTime = minutesToTime(parseFloat(departureSlider.value) * 60);
     const departDate = departureDateInput.value.trim();
-    if (!departTime || !departDate) {
+    if (!departDate) {
         alert('Bitte Datum und Uhrzeit angeben');
-        return;
-    }
-    const match = departTime.match(/^(\d{1,2}):(\d{2})$/);
-    if (!match) {
-        alert('Bitte Zeit im Format HH:MM angeben');
-        return;
-    }
-    const h = parseInt(match[1], 10);
-    const m = parseInt(match[2], 10);
-    if (h < 6 || (h === 6 && m < 30) || h > 16 || (h === 16 && m > 0)) {
-        alert('Abfahrtszeit nur zwischen 06:30 und 16:00');
         return;
     }
 
@@ -275,17 +282,19 @@ async function geocodePostalCode(postal) {
     return null;
 }
 
-function getNearestCustoms(point) {
-    let nearest = null;
-    let minDist = Infinity;
-    mapData.customsPoints.forEach(cp => {
-        const dist = Math.hypot(point[0] - cp.coords[0], point[1] - cp.coords[1]);
-        if (dist < minDist) {
-            minDist = dist;
-            nearest = cp;
+async function selectBestCustoms(start, dest) {
+    let best = null;
+    let bestDist = Infinity;
+    for (const cp of mapData.customsPoints) {
+        const a = await fetchRoute(start, cp.coords);
+        const b = await fetchRoute(cp.coords, dest);
+        const d = a.distance + b.distance;
+        if (d < bestDist) {
+            bestDist = d;
+            best = { cp, first: a, second: b };
         }
-    });
-    return nearest;
+    }
+    return best;
 }
 
 async function planRoute(destInfo, departDateStr, departTimeStr) {
@@ -297,13 +306,18 @@ async function planRoute(destInfo, departDateStr, departTimeStr) {
     routeLines = [];
     animatedMarkers = [];
 
-    const customs = getNearestCustoms(destCoords);
-    const start = mapData.startPoint.coords;
+    const start = currentStart.coords;
+    let first, second, customs = null;
+    if (!currentStart.isSwiss) {
+        const best = await selectBestCustoms(start, destCoords);
+        customs = best.cp;
+        first = best.first;
+        second = best.second;
+    } else {
+        first = await fetchRoute(start, destCoords);
+    }
 
-    const first = await fetchRoute(start, customs.coords);
-    const second = await fetchRoute(customs.coords, destCoords);
-
-    const fullCoords = [...first.coords, ...second.coords.slice(1)];
+    const fullCoords = customs ? [...first.coords, ...second.coords.slice(1)] : first.coords;
     const BREAK_HOURS = 4.5;
     const breakDist = BREAK_HOURS * 70 * 1000;
     const [preBreak, afterBreakFull] = splitRouteAtDistance(fullCoords, breakDist);
@@ -325,28 +339,36 @@ async function planRoute(destInfo, departDateStr, departTimeStr) {
     }
 
     const departDate = getDepartureDate(departDateStr, departTimeStr);
-    const firstLeg = driveSegment(departDate, first.duration / 3600, 0);
-    let arrivalAtCustoms = adjustForCustoms(firstLeg.time, customs.schedule);
-    arrivalAtCustoms = new Date(arrivalAtCustoms.getTime() + ((customs.averageWaitingMinutes || 0) + 30) * 60000);
-    const secondLeg = driveSegment(arrivalAtCustoms, second.duration / 3600, firstLeg.hoursToday);
-    let arrivalDestination = adjustForWeekend(secondLeg.time);
-    arrivalDestination = new Date(arrivalDestination.getTime() + 20 * 60000);
-
-    highlightCustoms(customs, arrivalAtCustoms);
-
-    const distanceKm = ((first.distance + second.distance) / 1000).toFixed(0);
+    let arrivalDestination, arrivalAtCustoms;
+    let distanceKm;
+    if (customs) {
+        const firstLeg = driveSegment(departDate, first.duration / 3600, 0);
+        arrivalAtCustoms = adjustForCustoms(firstLeg.time, customs.schedule);
+        arrivalAtCustoms = new Date(arrivalAtCustoms.getTime() + ((customs.averageWaitingMinutes || 0) + 30) * 60000);
+        const secondLeg = driveSegment(arrivalAtCustoms, second.duration / 3600, firstLeg.hoursToday);
+        arrivalDestination = adjustForWeekend(secondLeg.time);
+        arrivalDestination = new Date(arrivalDestination.getTime() + 20 * 60000);
+        highlightCustoms(customs, arrivalAtCustoms);
+        distanceKm = ((first.distance + second.distance) / 1000).toFixed(0);
+    } else {
+        const leg = driveSegment(departDate, first.duration / 3600, 0);
+        arrivalDestination = adjustForWeekend(leg.time);
+        arrivalDestination = new Date(arrivalDestination.getTime() + 20 * 60000);
+        distanceKm = (first.distance / 1000).toFixed(0);
+    }
 
     if (destinationMarker) {
         destinationMarker.setLatLng(destCoords);
     } else {
         destinationMarker = L.marker(destCoords).addTo(map);
     }
+    let popupHtml = `Früheste Ankunft (${postalCodeDisplay}): ${formatDate(arrivalDestination)}<br>` +
+        `Distanz: ${distanceKm} km`;
+    if (customs) {
+        popupHtml = `Ankunft Zoll (${customs.name}): ${formatDate(arrivalAtCustoms)}<br>` + popupHtml;
+    }
     destinationMarker
-        .bindPopup(
-            `Ankunft Zoll (${customs.name}): ${formatDate(arrivalAtCustoms)}<br>` +
-            `Früheste Ankunft (${postalCodeDisplay}): ${formatDate(arrivalDestination)}<br>` +
-            `Distanz: ${distanceKm} km`
-        )
+        .bindPopup(popupHtml)
         .openPopup();
     map.fitBounds(poly1.getBounds(), { padding: [20, 20] });
 }
@@ -484,5 +506,25 @@ function highlightCustoms(selected, arrival) {
                 .openPopup();
         }
     });
+}
+
+function minutesToTime(mins) {
+    const h = Math.floor(mins / 60);
+    const m = Math.round(mins % 60);
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function setStartLocation(name) {
+    const opt = mapData.startOptions.find(o => o.name === name);
+    if (!opt) return;
+    currentStart = opt;
+    if (startMarker) {
+        startMarker.setLatLng(opt.coords);
+        startMarker.setPopupContent(
+            `<div class="popup-title">${opt.popup}</div>` +
+            `<div class="popup-info"><strong>Location:</strong> ${opt.name}</div>` +
+            `<div class="popup-info"><strong>Current Cut-off:</strong> <span id="popup-cutoff">${currentCutoffTime}:00</span></div>`
+        );
+    }
 }
 
