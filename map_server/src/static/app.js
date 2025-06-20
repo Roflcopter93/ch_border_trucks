@@ -159,7 +159,8 @@ function calculateArrivalTime(transitHours) {
         cutoffTime.setDate(cutoffTime.getDate() + 1);
     }
     
-    const arrivalTime = new Date(cutoffTime.getTime() + (transitHours * 60 * 60 * 1000));
+    let arrivalTime = new Date(cutoffTime.getTime() + (transitHours * 60 * 60 * 1000));
+    arrivalTime = adjustForWeekend(arrivalTime);
     const dayDiff = Math.floor((arrivalTime.getTime() - currentDate.getTime()) / (24 * 60 * 60 * 1000));
     
     const timeString = arrivalTime.toLocaleTimeString('de-DE', { 
@@ -228,12 +229,12 @@ async function handleRouteSearch() {
     }
 
     try {
-        const destCoords = await geocodePostalCode(postalCode);
-        if (!destCoords) {
+        const destInfo = await geocodePostalCode(postalCode);
+        if (!destInfo) {
             alert('Ort nicht gefunden');
             return;
         }
-        await planRoute(destCoords, departureTime);
+        await planRoute(destInfo, departureTime);
     } catch (e) {
         console.error(e);
         alert('Fehler bei der Routenberechnung');
@@ -245,7 +246,9 @@ async function geocodePostalCode(postal) {
     const resp = await fetch(url, { headers: { 'Accept-Language': 'de' } });
     const data = await resp.json();
     if (data && data.length > 0) {
-        return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+        const item = data[0];
+        const name = item.display_name.split(',')[0];
+        return { coords: [parseFloat(item.lat), parseFloat(item.lon)], name };
     }
     return null;
 }
@@ -263,7 +266,9 @@ function getNearestCustoms(point) {
     return nearest;
 }
 
-async function planRoute(destCoords, departTimeStr) {
+async function planRoute(destInfo, departTimeStr) {
+    const destCoords = destInfo.coords;
+    const postalCodeDisplay = destInfo.name;
     // Remove previous dynamic routes
     routeLines.forEach(l => map.removeLayer(l));
     animatedMarkers.forEach(m => map.removeLayer(m));
@@ -284,10 +289,11 @@ async function planRoute(destCoords, departTimeStr) {
     let arrivalAtCustoms = new Date(departDate.getTime() + first.duration * 1000);
     arrivalAtCustoms = adjustForCustoms(arrivalAtCustoms, customs.schedule);
     arrivalAtCustoms = new Date(arrivalAtCustoms.getTime() + (customs.averageWaitingMinutes || 0) * 60000);
-    const arrivalDestination = new Date(arrivalAtCustoms.getTime() + second.duration * 1000);
+    let arrivalDestination = new Date(arrivalAtCustoms.getTime() + second.duration * 1000);
+    arrivalDestination = adjustForWeekend(arrivalDestination);
 
     const marker = L.marker(destCoords).addTo(map);
-    marker.bindPopup(`Früheste Ankunft: ${formatDate(arrivalDestination)}`).openPopup();
+    marker.bindPopup(`Früheste Ankunft (${postalCodeDisplay}): ${formatDate(arrivalDestination)}`).openPopup();
     map.fitBounds(poly.getBounds(), { padding: [20, 20] });
 }
 
@@ -296,7 +302,12 @@ async function fetchRoute(a, b) {
     const resp = await fetch(url);
     const data = await resp.json();
     const route = data.routes[0];
-    return { coords: route.geometry.coordinates.map(c => [c[1], c[0]]), duration: route.duration };
+    const speedMS = 70 * 1000 / 3600;
+    const duration = route.distance / speedMS; // seconds
+    return {
+        coords: route.geometry.coordinates.map(c => [c[1], c[0]]),
+        duration
+    };
 }
 
 function getDepartureDate(timeStr) {
@@ -332,6 +343,16 @@ function adjustForCustoms(arrival, schedule) {
             continue;
         }
         break;
+    }
+    return date;
+}
+
+function adjustForWeekend(date) {
+    const day = date.getDay();
+    if (day === 6) { // Saturday
+        date.setDate(date.getDate() + 2);
+    } else if (day === 0) { // Sunday
+        date.setDate(date.getDate() + 1);
     }
     return date;
 }
