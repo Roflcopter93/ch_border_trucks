@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -50,55 +50,6 @@
             width: 100%;
         }
 
-        .legend {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: rgba(255, 255, 255, 0.95);
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            z-index: 1000;
-            min-width: 250px;
-            backdrop-filter: blur(10px);
-        }
-
-        .legend h3 {
-            margin: 0 0 15px 0;
-            color: #2c3e50;
-            font-size: 1.2em;
-            border-bottom: 2px solid #3498db;
-            padding-bottom: 8px;
-        }
-
-        .legend-item {
-            display: flex;
-            align-items: center;
-            margin: 12px 0;
-            font-size: 0.95em;
-        }
-
-        .legend-line {
-            width: 30px;
-            height: 4px;
-            margin-right: 12px;
-            border-radius: 2px;
-        }
-
-        .legend-line.standard {
-            background-color: #2980b9;
-        }
-
-        .legend-line.optimized {
-            background: repeating-linear-gradient(
-                to right,
-                #27ae60 0px,
-                #27ae60 8px,
-                transparent 8px,
-                transparent 16px
-            );
-            height: 4px;
-        }
 
         .controls {
             position: absolute;
@@ -188,7 +139,7 @@
 
         /* Responsive design */
         @media (max-width: 768px) {
-            .legend, .controls {
+            .controls {
                 position: relative;
                 margin: 10px;
                 width: auto;
@@ -214,28 +165,14 @@
     <div class="map-container">
         <div id="map"></div>
         
-        <div class="legend">
-            <h3>Legend</h3>
-            <div class="legend-item">
-                <div class="legend-line standard"></div>
-                <span>A → B (Standard-Direkt)</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-line optimized"></div>
-                <span>A → C (Westschweiz-Optimierung)</span>
-            </div>
-            <div class="legend-item">
-                <div style="width: 30px; height: 20px; margin-right: 12px; background: #e74c3c; border-radius: 3px; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px;">📍</div>
-                <span>Pfeilgeschwindigkeit = Transitdauer</span>
-            </div>
-        </div>
+
 
         <div class="controls">
             <h4>Routenplanung</h4>
             <div class="route-form">
                 <input type="text" id="postalInput" placeholder="Ziel-PLZ">
                 <input type="date" id="departureDate">
-                <input type="text" id="departureTime" value="06:30" placeholder="HH:MM" pattern="^(?:[01][0-9]|2[0-3]):[0-5][0-9]$">
+                <input type="time" id="departureTime" value="06:30" step="60">
                 <button id="routeButton">Route</button>
             </div>
         </div>

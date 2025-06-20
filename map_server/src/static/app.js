@@ -306,12 +306,21 @@ async function planRoute(destInfo, departDateStr, departTimeStr) {
     const fullCoords = [...first.coords, ...second.coords.slice(1)];
     const BREAK_HOURS = 4.5;
     const breakDist = BREAK_HOURS * 70 * 1000;
-    const [preBreak, postBreak] = splitRouteAtDistance(fullCoords, breakDist);
+    const [preBreak, afterBreakFull] = splitRouteAtDistance(fullCoords, breakDist);
+    let breakSegment = [];
+    let postBreak = afterBreakFull;
+    if (afterBreakFull.length > 1) {
+        [breakSegment, postBreak] = splitRouteAtDistance(afterBreakFull, 1000);
+    }
 
     const poly1 = L.polyline(preBreak, { color: '#8e44ad', weight: 5 }).addTo(map);
     routeLines.push(poly1);
+    if (breakSegment.length > 1) {
+        const polyBreak = L.polyline(breakSegment, { color: '#e67e22', weight: 5, dashArray: '8 8' }).addTo(map);
+        routeLines.push(polyBreak);
+    }
     if (postBreak.length > 1) {
-        const poly2 = L.polyline(postBreak, { color: '#e67e22', weight: 5, dashArray: '8 8' }).addTo(map);
+        const poly2 = L.polyline(postBreak, { color: '#8e44ad', weight: 5 }).addTo(map);
         routeLines.push(poly2);
     }
 
@@ -323,7 +332,7 @@ async function planRoute(destInfo, departDateStr, departTimeStr) {
     let arrivalDestination = adjustForWeekend(secondLeg.time);
     arrivalDestination = new Date(arrivalDestination.getTime() + 20 * 60000);
 
-    highlightCustoms(customs);
+    highlightCustoms(customs, arrivalAtCustoms);
 
     const distanceKm = ((first.distance + second.distance) / 1000).toFixed(0);
 
@@ -462,9 +471,18 @@ function splitRouteAtDistance(coords, dist) {
     return [coords, []];
 }
 
-function highlightCustoms(selected) {
+function highlightCustoms(selected, arrival) {
     mapData.customsPoints.forEach(cp => {
-        if (cp.marker) cp.marker.setIcon(createCustomsIcon(cp === selected));
+        if (!cp.marker) return;
+        cp.marker.setIcon(createCustomsIcon(cp === selected));
+        if (cp === selected) {
+            cp.marker
+                .bindPopup(
+                    `<div class="popup-title">${cp.name}</div>` +
+                    `<div class="popup-info">Ankunft ca. ${formatDate(arrival)}</div>`
+                )
+                .openPopup();
+        }
     });
 }
 
